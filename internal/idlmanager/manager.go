@@ -149,9 +149,9 @@ func (m *Manager) reloadAll() error {
 
 		newPool.Store(key, cli)
 
-		// 构建路由映射
+		// 构建路由映射  POST:/api/user/login
 		for _, route := range svc.Routes {
-			newRouteTable[route.Path] = config.RouteTarget{
+			newRouteTable[route.HTTPMethod+":"+route.Path] = config.RouteTarget{
 				ServiceKey: key,
 				RPCMethod:  route.Method,
 			}

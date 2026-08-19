@@ -38,12 +38,12 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	newUUID, _ := uuid.NewUUID()
 	ctx = metainfo.WithPersistentValue(ctx, "x-trace-id", newUUID.String())
 	// 匹配路由目标
-	target, ok := config.MatchRoute(string(c.Path()))
+	target, ok := config.MatchRoute(string(c.Method()) + ":" + string(c.Path()))
 	if !ok {
 		c.JSON(consts.StatusNotFound, map[string]interface{}{
 			"sign":    time.Now().UnixMilli(),
 			"code":    consts.StatusNotFound,
-			"message": "route not found",
+			"message": "not found",
 			"traceId": newUUID.String(),
 		})
 		return
