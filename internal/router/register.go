@@ -10,7 +10,7 @@ func RegisterRoutes(h *server.Hertz) {
 	apiGroup := h.Group("/api")
 	{
 		// Webhook入口
-		apiGroup.GET("/webhook/idl-update", handler.WebhookIDLUpdate)
+		apiGroup.GET("/webhook/update", handler.WebhookUpdate)
 
 		// 直调模式（调试用）
 		//apiGroup.POST("/:service/:method", handler.DirectCallHandler)

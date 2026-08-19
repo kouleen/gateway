@@ -11,6 +11,7 @@ require (
 	github.com/hertz-contrib/logger/accesslog v0.0.0-20241107070745-e4ce8c54dd97
 	github.com/kitex-contrib/registry-etcd v0.3.0
 	github.com/redis/go-redis/v9 v9.22.0
+	golang.org/x/crypto v0.36.0
 	golang.org/x/sync v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
