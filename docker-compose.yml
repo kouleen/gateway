@@ -1,0 +1,16 @@
+services:
+  gateway:
+    image: kouleen/gateway:latest
+    container_name: gateway
+    ports:
+      - "8888:8888"
+    environment:
+      - LISTEN_ADDR=${LISTEN_ADDR}
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - IDL_REPO_URL=${IDL_REPO_URL}
+      - IDL_REPO_BRANCH=${IDL_REPO_BRANCH}
+      - IDL_LOCAL_PATH=${IDL_LOCAL_PATH}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
