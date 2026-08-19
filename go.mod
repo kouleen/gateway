@@ -4,11 +4,12 @@ go 1.25.0
 
 require (
 	github.com/bytedance/gopkg v0.1.4
-	github.com/cloudwego/hertz v0.7.2
+	github.com/cloudwego/hertz v0.9.4-0.20241021100040-3477b0309b81
 	github.com/cloudwego/kitex v0.16.3
 	github.com/google/uuid v1.6.0
 	github.com/hertz-contrib/cors v0.1.0
 	github.com/hertz-contrib/logger/accesslog v0.0.0-20241107070745-e4ce8c54dd97
+	github.com/hertz-contrib/websocket v0.2.0
 	github.com/kitex-contrib/registry-etcd v0.3.0
 	github.com/redis/go-redis/v9 v9.22.0
 	golang.org/x/crypto v0.36.0

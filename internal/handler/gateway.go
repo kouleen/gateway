@@ -2,21 +2,41 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/common/json"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/cloudwego/kitex/client/genericclient"
 	"github.com/google/uuid"
+	"github.com/hertz-contrib/websocket"
 	"github.com/kouleen/gateway/internal/config"
 	"github.com/kouleen/gateway/internal/generic"
 )
 
+var upgrader = websocket.HertzUpgrader{
+	// 生产环境修改CheckOrigin
+	CheckOrigin: func(c *app.RequestContext) bool {
+		return true
+	},
+}
+
+// isWebSocketRequest 判断是不是websocket升级请求
+func isWebSocketRequest(c *app.RequestContext) bool {
+	connHdr := string(c.GetHeader("Connection"))
+	upgradeHdr := string(c.GetHeader("Upgrade"))
+	return c.IsGet() &&
+		strings.EqualFold(connHdr, "Upgrade") &&
+		strings.EqualFold(upgradeHdr, "websocket")
+}
+
 // CustomRouteHandler 自定义路由统一转发入口
 func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	newUUID, _ := uuid.NewUUID()
-
+	ctx = metainfo.WithPersistentValue(ctx, "x-trace-id", newUUID.String())
 	// 匹配路由目标
 	target, ok := config.MatchRoute(string(c.Path()))
 	if !ok {
@@ -41,6 +61,10 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	if isWebSocketRequest(c) {
+		webSocketCallHandle(ctx, c, cli, &target)
+		return
+	}
 	// 组装请求参数
 	reqBody := make(map[string]interface{})
 
@@ -96,6 +120,75 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 		"data":    resp,
 		"traceId": newUUID.String(),
 	})
+}
+
+func webSocketCallHandle(ctx context.Context, c *app.RequestContext, cli genericclient.Client, target *config.RouteTarget) {
+	traceId, _ := metainfo.GetPersistentValue(ctx, "x-trace-id")
+	if userId, exist := c.Get("userId"); exist {
+		ctx = metainfo.WithPersistentValue(ctx, "x-user-id", userId.(string))
+	}
+	if err := upgrader.Upgrade(c, func(conn *websocket.Conn) {
+		defer func(conn *websocket.Conn) {
+			defer func(conn *websocket.Conn) {
+				_ = conn.Close()
+			}(conn)
+			for {
+				messageType, message, err := conn.ReadMessage()
+				if err != nil {
+					logger.CtxErrorf(ctx, "websocket read error: %v", err)
+					return
+				}
+
+				// 解析ws payload为参数map
+				var reqBody map[string]interface{}
+				if err = json.Unmarshal(message, &reqBody); err != nil {
+					respBytes, _ := json.Marshal(map[string]interface{}{
+						"sign":    time.Now().UnixMilli(),
+						"code":    consts.StatusBadRequest,
+						"message": err.Error(),
+						"traceId": traceId,
+					})
+					_ = conn.WriteMessage(messageType, respBytes)
+					continue
+				}
+				// ws内每条消息都发起泛化调用
+				logger.CtxInfof(ctx, "[%s]-WS Method: [%s] Path: [%s],request: %#v", traceId, string(c.Method()), string(c.Path()), reqBody)
+				resp, err := cli.GenericCall(ctx, target.RPCMethod, reqBody)
+				logger.CtxInfof(ctx, "[%s]-WS Method: [%s] Path: [%s],response: %#v,err: %+v", traceId, string(c.Method()), string(c.Path()), resp, err)
+				var out map[string]interface{}
+				if err != nil {
+					out = map[string]interface{}{
+						"sign":    time.Now().UnixMilli(),
+						"code":    consts.StatusInternalServerError,
+						"message": err.Error(),
+						"traceId": traceId,
+					}
+				} else {
+					out = map[string]interface{}{
+						"sign":    time.Now().UnixMilli(),
+						"code":    consts.StatusOK,
+						"message": "success",
+						"data":    resp,
+						"traceId": traceId,
+					}
+				}
+				outBytes, _ := json.Marshal(out)
+				if err = conn.WriteMessage(messageType, outBytes); err != nil {
+					logger.CtxErrorf(ctx, "websocket write error: %v", err)
+					return
+				}
+			}
+		}(conn)
+	}); err != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusBadRequest,
+			"message": err.Error(),
+			"traceId": traceId,
+		})
+		return
+	}
+
 }
 
 // DirectCallHandler 直调模式（兼容旧版，调试用）
