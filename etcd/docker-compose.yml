@@ -1,0 +1,24 @@
+services:
+  etcd:
+    image: registry.k8s.io/etcd:v3.6.12
+    container_name: etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    command:
+      - etcd
+      - --name=etcd-node1
+      - --data-dir=/var/lib/etcd
+      - --advertise-client-urls=http://10.0.12.6:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=etcd-node1=http://127.0.0.1:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=kouleen.china@gmail.com
+    networks:
+      - go-server-internal
+networks:
+  go-server-internal:
+    driver: bridge
+    name: go-server-internal

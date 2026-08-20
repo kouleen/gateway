@@ -14,3 +14,10 @@ services:
       - REDIS_ADDR=${REDIS_ADDR}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB}
+    networks:
+      - go-server-internal
+networks:
+  go-server-internal:
+    external: true
+    name: go-server-internal
+
