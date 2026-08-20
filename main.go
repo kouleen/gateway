@@ -5,6 +5,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/middlewares/server/recovery"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/hertz-contrib/cors"
 	"github.com/hertz-contrib/logger/accesslog"
 	"github.com/kouleen/gateway/internal/config"
@@ -22,7 +23,7 @@ func main() {
 
 	// 3. 初始化IDL管理器（克隆仓库+加载客户端+启动热更新能力）
 	idlmanager.InitManager(cfg)
-
+	hlog.SetLevel(hlog.LevelInfo)
 	// 4. 创建Hertz实例
 	h := server.Default(
 		server.WithHostPorts(cfg.ListenAddr),

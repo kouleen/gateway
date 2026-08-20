@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 go build -o gateway ./main.go
 # 第二阶段：创建轻量级运行时镜像
 FROM kouleen/alpine:latest
 LABEL authors="Kouleen.china@gmail.com"
-RUN apk add --no-cache tzdata git ca-certificates && rm -rf /var/cache/apk/*
+RUN apk add --no-cache tzdata && rm -rf /var/cache/apk/*
 
 # 设置工作目录
 WORKDIR /app
