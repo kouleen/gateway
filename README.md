@@ -23,7 +23,7 @@ gateway/
 ├── docker-compose.yml           # Docker Compose 配置
 ├── .github/workflows/           # CI/CD 工作流
 │   └── docker-image.yml         # Docker 镜像自动构建流水线
-├── idl/                         # IDL 定义（示例）
+├── idl/                         # IDL 定义（示例） 
 │   ├── common/                  # 公共结构体
 │   │   ├── base.thrift          # 基础请求/响应结构
 │   │   └── response.thrift      # 统一响应结构
