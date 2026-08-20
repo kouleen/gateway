@@ -101,16 +101,16 @@ go build -o gateway main.go
 
 ### 环境变量
 
-| 变量名              | 默认值             | 说明                              |
-| ------------------- | ------------------ | --------------------------------- |
+| 变量名              | 默认值              | 说明                              |
+| ------------------- |------------------| --------------------------------- |
 | `LISTEN_ADDR`     | `:8888`          | 网关监听地址                      |
 | `ETCD_ENDPOINTS`  | `127.0.0.1:2379` | etcd 服务发现地址，多个用逗号分隔 |
-| `IDL_REPO_URL`    | 空                 | IDL 仓库的 Git 地址               |
-| `IDL_REPO_BRANCH` | 空                 | IDL 仓库分支                      |
-| `IDL_LOCAL_PATH`  | `/opt/idl-repo`  | IDL 仓库本地存储路径              |
-| `WEBHOOK_SECRET`  | 空                 | Webhook 签名密钥（留空则不校验）  |
+| `IDL_REPO_URL`    | 空                | IDL 仓库的 Git 地址               |
+| `IDL_REPO_BRANCH` | 空                | IDL 仓库分支                      |
+| `IDL_LOCAL_PATH`  | `idl`            | IDL 仓库本地存储路径              |
+| `WEBHOOK_SECRET`  | 空                | Webhook 签名密钥（留空则不校验）  |
 | `REDIS_ADDR`      | `127.0.0.1:6379` | Redis 地址                        |
-| `REDIS_PASSWORD`  | 空                 | Redis 密码                        |
+| `REDIS_PASSWORD`  | 空                | Redis 密码                        |
 | `REDIS_DB`        | `0`              | Redis 数据库索引                  |
 
 ### 服务路由配置（services.yaml）

@@ -29,7 +29,7 @@ func LoadConfig() *Config {
 		EtcdEndpoints: strings.Split(getEnv("ETCD_ENDPOINTS", "127.0.0.1:2379"), ","),
 		IDLRepoURL:    getEnv("IDL_REPO_URL", ""),
 		IDLRepoBranch: getEnv("IDL_REPO_BRANCH", ""),
-		IDLLocalPath:  getEnv("IDL_LOCAL_PATH", "/opt/idl-repo"),
+		IDLLocalPath:  getEnv("IDL_LOCAL_PATH", "idl"),
 		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
 		RedisAddr:     getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
