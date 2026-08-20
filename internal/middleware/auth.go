@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
@@ -60,8 +61,8 @@ func AuthMiddleware() app.HandlerFunc {
 			return
 		}
 
-		// 4. 注入用户ID到请求上下文，后续Handler可读取
-		c.Set("userId", userId)
+		ctx = metainfo.WithPersistentValue(ctx, "x-user-id", userId)
+		ctx = metainfo.WithPersistentValue(ctx, "x-token", authorization)
 
 		// 5. 放行，执行后续业务逻辑
 		c.Next(ctx)

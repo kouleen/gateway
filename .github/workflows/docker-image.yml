@@ -1,0 +1,95 @@
+name: GitHub Docker Image CI
+on:
+  push:
+    branches: [ "release" ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 拉取代码
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@v4
+
+      # 初始化Docker构建工具
+      - name: Set up Docker
+        id: setup_docker
+        uses: docker/setup-buildx-action@v3
+
+      # 登录Docker Hub
+      - name: Login to Docker Hub
+        id: docker_login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 构建镜像并推送到 hub.docker.com kouleen/golive-server:latest
+      - name: Build and push Docker image
+        id: docker_build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true # 构建完成自动推送
+          tags: kouleen/gogateway:latest
+        #run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+
+        # 仅构建失败时，赋值失败阶段+备注到环境变量
+      - name: Set Fail Info Env
+        id: set_fail_env
+        if: always()
+        run: |
+          if [[ "${{ steps.checkout.outcome }}" == "failure" ]]; then
+            echo "fail_msg=actions/checkout拉取代码失败" >> $GITHUB_ENV
+          elif [[ "${{ steps.setup_docker.outcome }}" == "failure" ]]; then
+            echo "fail_msg=buildx工具初始化失败" >> $GITHUB_ENV
+          elif [[ "${{ steps.docker_login.outcome }}" == "failure" ]]; then
+            echo "fail_msg=Docker账号密码密钥错误，登录仓库失败" >> $GITHUB_ENV
+          elif [[ "${{ steps.docker_build.outcome }}" == "failure" ]]; then
+            echo "fail_stage=Docker镜像构建推送" >> $GITHUB_ENV
+            echo "fail_msg=Docker镜像构建推送失败" >> $GITHUB_ENV
+          else
+            echo "fail_msg=流水线未发现异常" >> $GITHUB_ENV
+          fi
+
+      - name: Call Custom Callback API
+        if : always()
+        run: |
+          curl -X POST "https://www.kouleen.cn/api/docker/webhook/put" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "runId": "${{ github.run_id }}",
+            "imageName": "kouleen/gogateway:latest",
+            "containerName": "gogateway",
+            "branch": "${{ github.ref_name }}",
+            "repo": "${{ github.repository }}",
+            "htmlUrl": "${{ github.event.repository.html_url }}",
+            "cloneUrl": "${{ github.event.repository.clone_url }}",
+            "sshUrl": "${{ github.event.repository.ssh_url }}",
+            "status": "${{ job.status }}",
+            "actor": "${{ github.actor }}",
+            "commitMessage": "${{ github.event.head_commit.message }}",
+            "workflow": "${{ github.workflow }}",
+            "triggerType": "${{ github.event_name }}",
+            "failRemark": "${{ env.fail_msg }}",
+            "networkMode": "",
+            "restartPolicy": "",
+            "removeOldExist": true,
+            "enableIT": true,
+            "portMapping": {
+                "8888": "8888"
+            },
+            "envList": [
+                "ETCD_ENDPOINTS=${{ secrets.ETCD_ENDPOINTS }}",
+                "IDL_LOCAL_PATH=${{ secrets.IDL_LOCAL_PATH }}",
+                "IDL_REPO_BRANCH=${{ secrets.IDL_REPO_BRANCH }}",
+                "IDL_REPO_URL=${{ secrets.IDL_REPO_URL }}",
+                "LISTEN_ADDR=${{ secrets.LISTEN_ADDR }}",
+                "REDIS_ADDR=${{ secrets.REDIS_ADDR }}",
+                "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}",
+                "REDIS_DB=${{ secrets.REDIS_DB }}"
+            ],
+            "volumeBinds": [],
+            "cmdOverride": []
+          }'
