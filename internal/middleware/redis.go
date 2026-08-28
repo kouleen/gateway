@@ -30,5 +30,5 @@ func InitRedis(addr, password string, db int) {
 // GetUserIdByToken 根据Token查询用户ID
 // Key约定：auth:token:{token}  value: 用户ID
 func GetUserIdByToken(ctx context.Context, token string) (string, error) {
-	return redisClient.Get(ctx, "auth:token:"+token).Result()
+	return redisClient.Get(ctx, token).Result()
 }

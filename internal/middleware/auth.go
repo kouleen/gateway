@@ -6,6 +6,7 @@ import (
 
 	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/common/json"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
@@ -51,8 +52,8 @@ func AuthMiddleware() app.HandlerFunc {
 		}
 
 		// 3. Redis校验Token有效性
-		userId, err := GetUserIdByToken(ctx, authorization)
-		if err != nil || userId == "" {
+		userStr, err := GetUserIdByToken(ctx, authorization)
+		if err != nil || userStr == "" {
 			c.JSON(consts.StatusUnauthorized, map[string]interface{}{
 				"code":    consts.StatusUnauthorized,
 				"message": "invalid or expired token",
@@ -60,8 +61,15 @@ func AuthMiddleware() app.HandlerFunc {
 			c.Abort()
 			return
 		}
+		var user map[string]any
+		if err = json.Unmarshal([]byte(userStr), &user); err != nil {
+			c.JSON(consts.StatusUnauthorized, map[string]interface{}{
+				"code":    consts.StatusUnauthorized,
+				"message": "invalid or unmarshal token",
+			})
+		}
 
-		ctx = metainfo.WithPersistentValue(ctx, "x-user-id", userId)
+		ctx = metainfo.WithPersistentValue(ctx, "x-user-id", user["id"].(string))
 		ctx = metainfo.WithPersistentValue(ctx, "x-token", authorization)
 
 		// 5. 放行，执行后续业务逻辑
