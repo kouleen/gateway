@@ -21,12 +21,7 @@ func WebhookUpdate(ctx context.Context, c *app.RequestContext) {
 			c.JSON(consts.StatusForbidden, map[string]string{"message": "secret not found"})
 			return
 		}
-		reqSecret, err := bcrypt.GenerateFromPassword([]byte(sign), bcrypt.DefaultCost)
-		if err != nil {
-			c.JSON(consts.StatusInternalServerError, map[string]string{"message": "bcrypt error"})
-			return
-		}
-		if err = bcrypt.CompareHashAndPassword(reqSecret, []byte(secret)); err != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(secret), []byte(sign)); err != nil {
 			c.JSON(consts.StatusForbidden, map[string]string{"message": "secret incorrect"})
 			return
 		}
