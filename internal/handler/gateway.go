@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,8 +101,17 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	ctx = metainfo.WithPersistentValue(ctx, "x-trace-id", newUUID.String())
 
 	logger.CtxInfof(ctx, "[%s]-Request Method: [%s] Path: [%s],request: %#v", newUUID.String(), string(c.Method()), string(c.Path()), reqBody)
+	if er := convReqBody(reqBody); er != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusInternalServerError,
+			"message": er.Error(),
+			"traceId": newUUID.String(),
+		})
+	}
 	// 发起泛化调用
 	resp, err := cli.GenericCall(ctx, target.RPCMethod, reqBody)
+	convRespBody(resp, err)
 	logger.CtxInfof(ctx, "[%s]-Response Method: [%s] Path: [%s],response: %#v,err: %+v", newUUID.String(), string(c.Method()), string(c.Path()), resp, err)
 	if err != nil {
 		c.JSON(consts.StatusOK, map[string]interface{}{
@@ -120,6 +130,87 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 		"data":    resp,
 		"traceId": newUUID.String(),
 	})
+}
+
+func convReqBody(reqBody map[string]interface{}) error {
+	if reqBody == nil {
+		return nil
+	}
+	current, ok := reqBody["current"]
+	if ok {
+		cur, err := strconv.ParseInt(current.(string), 10, 64)
+		if err != nil {
+			return err
+		}
+		reqBody["current"] = cur
+	}
+	size, ok := reqBody["size"]
+	if ok {
+		sizeInt, err := strconv.ParseInt(size.(string), 10, 64)
+		if err != nil {
+			return err
+		}
+		reqBody["size"] = sizeInt
+	}
+	id, ok := reqBody["id"]
+	if ok {
+		idInt, err := strconv.ParseInt(id.(string), 10, 64)
+		if err != nil {
+			return err
+		}
+		reqBody["id"] = idInt
+	}
+	status, ok := reqBody["status"]
+	if ok {
+		statusInt, err := strconv.ParseInt(status.(string), 10, 8)
+		if err != nil {
+			return err
+		}
+		reqBody["status"] = int8(statusInt)
+	}
+	return nil
+}
+
+func convRespBody(resp any, err error) {
+	if err != nil {
+		return
+	}
+	data, ok := resp.(map[string]interface{})
+	if ok {
+		records, ok := data["records"]
+		if ok {
+			i := records.([]interface{})
+			for _, m := range i {
+				i2 := m.(map[string]interface{})
+				i2["id"] = strconv.FormatInt(i2["id"].(int64), 10)
+				i2["createdBy"] = strconv.FormatInt(i2["createdBy"].(int64), 10)
+				i2["updatedBy"] = strconv.FormatInt(i2["updatedBy"].(int64), 10)
+			}
+			return
+		}
+		id, ok := data["id"]
+		if ok {
+			data["id"] = strconv.FormatInt(id.(int64), 10)
+			data["createdBy"] = strconv.FormatInt(data["createdBy"].(int64), 10)
+			data["updatedBy"] = strconv.FormatInt(data["updatedBy"].(int64), 10)
+			return
+		}
+	} else {
+		list, ok := resp.([]interface{})
+		if ok {
+			for _, i2 := range list {
+				m, ok := i2.(map[string]interface{})
+				if ok {
+					id, ok := m["id"]
+					if ok {
+						data["id"] = strconv.FormatInt(id.(int64), 10)
+						data["createdBy"] = strconv.FormatInt(data["createdBy"].(int64), 10)
+						data["updatedBy"] = strconv.FormatInt(data["updatedBy"].(int64), 10)
+					}
+				}
+			}
+		}
+	}
 }
 
 func webSocketCallHandle(ctx context.Context, c *app.RequestContext, cli genericclient.Client, target *config.RouteTarget) {
