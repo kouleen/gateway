@@ -67,6 +67,7 @@ func (m *Manager) initRepo() error {
 			ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
 			Depth:         1, // --depth=1 浅克隆
 			Auth:          m.getGitAuth(),
+			Progress:      os.Stdout,
 		})
 		if err != nil {
 			return fmt.Errorf("git clone failed: %w", err)
@@ -107,6 +108,7 @@ func (m *Manager) pullRepo() error {
 	// pull = fetch + merge
 	err = workTree.Pull(&git.PullOptions{
 		ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
+		Progress:      os.Stdout,
 	})
 	if err != nil {
 		// 没有更新时 go‑git 返回 git.NoErrAlreadyUpToDate，不算错误
