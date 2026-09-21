@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,6 +116,12 @@ func (m *Manager) pullRepo() error {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
 			logger.Infof("IDL repo already up‑to‑date")
 			return nil
+		}
+		if strings.Contains(err.Error(), "object not found") {
+			logger.Warnf("git object missing, will delete local repo and re-clone")
+			// 删除目录，然后走clone逻辑
+			_ = os.RemoveAll(m.cfg.IDLLocalPath)
+			return m.initRepo()
 		}
 		return fmt.Errorf("git pull failed: %w", err)
 	}
