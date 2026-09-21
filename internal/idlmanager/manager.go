@@ -1,6 +1,7 @@
 package idlmanager
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -106,13 +107,12 @@ func (m *Manager) pullRepo() error {
 	}
 
 	// pull = fetch + merge
-	err = workTree.Pull(&git.PullOptions{
+	if err = workTree.Pull(&git.PullOptions{
 		ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
 		Progress:      os.Stdout,
-	})
-	if err != nil {
+	}); err != nil {
 		// 没有更新时 go‑git 返回 git.NoErrAlreadyUpToDate，不算错误
-		if err == git.NoErrAlreadyUpToDate {
+		if errors.Is(err, git.NoErrAlreadyUpToDate) {
 			logger.Infof("IDL repo already up‑to‑date")
 			return nil
 		}
