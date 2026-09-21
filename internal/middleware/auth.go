@@ -37,7 +37,7 @@ func AuthMiddleware() app.HandlerFunc {
 			token = c.GetHeader("X-Token")
 		}
 		if token == nil || string(token) == "" {
-			c.JSON(consts.StatusUnauthorized, map[string]interface{}{
+			c.JSON(consts.StatusOK, map[string]interface{}{
 				"code":    consts.StatusUnauthorized,
 				"message": "Unauthorized",
 			})
@@ -54,7 +54,7 @@ func AuthMiddleware() app.HandlerFunc {
 		// 3. Redis校验Token有效性
 		userStr, err := GetUserIdByToken(ctx, authorization)
 		if err != nil || userStr == "" {
-			c.JSON(consts.StatusUnauthorized, map[string]interface{}{
+			c.JSON(consts.StatusOK, map[string]interface{}{
 				"code":    consts.StatusUnauthorized,
 				"message": "invalid or expired token",
 			})
@@ -63,7 +63,7 @@ func AuthMiddleware() app.HandlerFunc {
 		}
 		var user map[string]any
 		if err = json.Unmarshal([]byte(userStr), &user); err != nil {
-			c.JSON(consts.StatusUnauthorized, map[string]interface{}{
+			c.JSON(consts.StatusOK, map[string]interface{}{
 				"code":    consts.StatusUnauthorized,
 				"message": "invalid or unmarshal token",
 			})

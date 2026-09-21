@@ -42,7 +42,7 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	// 匹配路由目标
 	target, ok := config.MatchRoute(string(c.Method()) + ":" + string(c.Path()))
 	if !ok {
-		c.JSON(consts.StatusNotFound, map[string]interface{}{
+		c.JSON(consts.StatusOK, map[string]interface{}{
 			"sign":    time.Now().UnixMilli(),
 			"code":    consts.StatusNotFound,
 			"message": "not found",
@@ -54,7 +54,7 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	// 获取客户端
 	cli, ok := generic.GetClient(target.ServiceKey)
 	if !ok {
-		c.JSON(consts.StatusNotFound, map[string]interface{}{
+		c.JSON(consts.StatusOK, map[string]interface{}{
 			"sign":    time.Now().UnixMilli(),
 			"code":    consts.StatusNotFound,
 			"message": "service not found",
@@ -137,94 +137,150 @@ func convReqBody(reqBody map[string]interface{}) error {
 	if reqBody == nil {
 		return nil
 	}
+	return walkReqNode(reqBody, true)
+}
 
-	// 通用函数：把interface{}转成int64，兼容 float64 / string
-	toInt64 := func(v interface{}) (int64, error) {
-		switch val := v.(type) {
-		case float64:
-			return int64(val), nil
-		case string:
-			return strconv.ParseInt(val, 10, 64)
-		default:
-			return 0, fmt.Errorf("unsupported type: %T", v)
-		}
+// walkReqNode
+// isRoot = true 代表最外层，只有根节点才解析 current / size
+func walkReqNode(node any, isRoot bool) error {
+	if node == nil {
+		return nil
 	}
 
-	current, ok := reqBody["current"]
-	if ok {
-		cur, err := toInt64(current)
-		if err != nil {
-			return err
+	switch v := node.(type) {
+	case map[string]interface{}:
+		// 顶层才转 current、size
+		if isRoot {
+			if err := convertField(v, "current", false); err != nil {
+				return err
+			}
+			if err := convertField(v, "size", false); err != nil {
+				return err
+			}
 		}
-		reqBody["current"] = cur
-	}
-	size, ok := reqBody["size"]
-	if ok {
-		sizeInt, err := toInt64(size)
-		if err != nil {
-			return err
+		// 所有层级都转换这些字段
+		_ = convertField(v, "id", false)
+		_ = convertField(v, "parentId", false)
+		_ = convertField(v, "status", true)
+		_ = convertField(v, "createdBy", false)
+		_ = convertField(v, "updatedBy", false)
+
+		// 递归遍历子value（数组/嵌套map）
+		for _, val := range v {
+			if err := walkReqNode(val, false); err != nil {
+				return err
+			}
 		}
-		reqBody["size"] = sizeInt
-	}
-	id, ok := reqBody["id"]
-	if ok {
-		idInt, err := toInt64(id)
-		if err != nil {
-			return err
+
+	case []interface{}:
+		// ✅ 重点：数组分两种情况
+		// 1. 元素是字符串数字：["123","456"] → 直接转 int64
+		// 2. 元素是map：[ {id:"1"}, {id:"2"} ] → 递归map
+		for idx, item := range v {
+			switch it := item.(type) {
+			case string, float64:
+				// 数组元素本身是数字字符串，比如批量ids数组
+				i64, err := toInt64(it)
+				if err != nil {
+					return fmt.Errorf("array index %d parse failed: %w", idx, err)
+				}
+				v[idx] = i64
+			default:
+				// map / 其他，继续往下递归
+				if err := walkReqNode(item, false); err != nil {
+					return err
+				}
+			}
 		}
-		reqBody["id"] = idInt
-	}
-	status, ok := reqBody["status"]
-	if ok {
-		statusInt, err := toInt64(status)
-		if err != nil {
-			return err
-		}
-		reqBody["status"] = int8(statusInt)
 	}
 	return nil
+}
+
+func convertField(m map[string]interface{}, key string, isInt8 bool) error {
+	val, exist := m[key]
+	if !exist {
+		return nil
+	}
+	i64, err := toInt64(val)
+	if err != nil {
+		return fmt.Errorf("field %s parse error: %w", key, err)
+	}
+	if isInt8 {
+		m[key] = int8(i64)
+	} else {
+		m[key] = i64
+	}
+	return nil
+}
+
+// toInt64 统一转换：float64 / string / int / int64
+func toInt64(v any) (int64, error) {
+	switch src := v.(type) {
+	case float64:
+		return int64(src), nil
+	case string:
+		return strconv.ParseInt(src, 10, 64)
+	case int64:
+		return src, nil
+	case int:
+		return int64(src), nil
+	default:
+		return 0, fmt.Errorf("unsupported type %T, value=%v", v, v)
+	}
 }
 
 func convRespBody(resp any, err error) {
 	if err != nil {
 		return
 	}
-	data, ok := resp.(map[string]interface{})
-	if ok {
-		records, ok := data["records"]
-		if ok {
-			i := records.([]interface{})
-			for _, m := range i {
-				i2 := m.(map[string]interface{})
-				i2["id"] = strconv.FormatInt(i2["id"].(int64), 10)
-				i2["createdBy"] = strconv.FormatInt(i2["createdBy"].(int64), 10)
-				i2["updatedBy"] = strconv.FormatInt(i2["updatedBy"].(int64), 10)
+	walkNode(resp)
+}
+
+// walkNode 递归遍历节点，把 int64 的 id / createdBy / updatedBy 转字符串
+func walkNode(node any) {
+	if node == nil {
+		return
+	}
+	switch v := node.(type) {
+	case map[string]interface{}:
+		// v 已经是map，这里 v 不可能是nil map（类型断言成功时map非nil）
+		convertInt64Field(v, "id")
+		convertInt64Field(v, "parentId")
+		convertInt64Field(v, "createdBy")
+		convertInt64Field(v, "updatedBy")
+
+		// 处理分页 records 数组
+		if records, ok := v["records"].([]interface{}); ok {
+			for _, item := range records {
+				walkNode(item)
 			}
-			return
 		}
-		id, ok := data["id"]
-		if ok {
-			data["id"] = strconv.FormatInt(id.(int64), 10)
-			data["createdBy"] = strconv.FormatInt(data["createdBy"].(int64), 10)
-			data["updatedBy"] = strconv.FormatInt(data["updatedBy"].(int64), 10)
-			return
-		}
-	} else {
-		list, ok := resp.([]interface{})
-		if ok {
-			for _, i2 := range list {
-				m, ok := i2.(map[string]interface{})
-				if ok {
-					id, ok := m["id"]
-					if ok {
-						data["id"] = strconv.FormatInt(id.(int64), 10)
-						data["createdBy"] = strconv.FormatInt(data["createdBy"].(int64), 10)
-						data["updatedBy"] = strconv.FormatInt(data["updatedBy"].(int64), 10)
-					}
-				}
+		// 处理菜单树 children 递归！
+		if children, ok := v["children"].([]interface{}); ok {
+			for _, child := range children {
+				walkNode(child)
 			}
+		}
+
+	case []interface{}:
+		// 顶层直接返回数组的场景
+		for _, item := range v {
+			walkNode(item)
 		}
 	}
+}
+
+// convertInt64Field 安全转换单个字段：存在且是int64就转为string
+func convertInt64Field(m map[string]interface{}, key string) {
+	val, exist := m[key]
+	if !exist {
+		return
+	}
+	num, ok := val.(int64)
+	if !ok {
+		return
+	}
+	m[key] = strconv.FormatInt(num, 10)
 }
 
 func webSocketCallHandle(ctx context.Context, c *app.RequestContext, cli genericclient.Client, target *config.RouteTarget) {
