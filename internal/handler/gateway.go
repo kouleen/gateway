@@ -77,7 +77,7 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 
 	// 非GET请求解析JSON Body
 	if string(c.Method()) != "GET" {
-		if err := c.BindJSON(&reqBody); err != nil {
+		if err := c.BindJSON(&reqBody); err != nil && err.Error() != "EOF" {
 			c.JSON(consts.StatusOK, map[string]interface{}{
 				"sign":    time.Now().UnixMilli(),
 				"code":    consts.StatusInternalServerError,
