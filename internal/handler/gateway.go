@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -136,9 +137,22 @@ func convReqBody(reqBody map[string]interface{}) error {
 	if reqBody == nil {
 		return nil
 	}
+
+	// 通用函数：把interface{}转成int64，兼容 float64 / string
+	toInt64 := func(v interface{}) (int64, error) {
+		switch val := v.(type) {
+		case float64:
+			return int64(val), nil
+		case string:
+			return strconv.ParseInt(val, 10, 64)
+		default:
+			return 0, fmt.Errorf("unsupported type: %T", v)
+		}
+	}
+
 	current, ok := reqBody["current"]
 	if ok {
-		cur, err := strconv.ParseInt(current.(string), 10, 64)
+		cur, err := toInt64(current)
 		if err != nil {
 			return err
 		}
@@ -146,7 +160,7 @@ func convReqBody(reqBody map[string]interface{}) error {
 	}
 	size, ok := reqBody["size"]
 	if ok {
-		sizeInt, err := strconv.ParseInt(size.(string), 10, 64)
+		sizeInt, err := toInt64(size)
 		if err != nil {
 			return err
 		}
@@ -154,7 +168,7 @@ func convReqBody(reqBody map[string]interface{}) error {
 	}
 	id, ok := reqBody["id"]
 	if ok {
-		idInt, err := strconv.ParseInt(id.(string), 10, 64)
+		idInt, err := toInt64(id)
 		if err != nil {
 			return err
 		}
@@ -162,7 +176,7 @@ func convReqBody(reqBody map[string]interface{}) error {
 	}
 	status, ok := reqBody["status"]
 	if ok {
-		statusInt, err := strconv.ParseInt(status.(string), 10, 8)
+		statusInt, err := toInt64(status)
 		if err != nil {
 			return err
 		}
