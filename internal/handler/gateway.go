@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -137,20 +138,31 @@ func convReqBody(reqBody map[string]interface{}) error {
 	if reqBody == nil {
 		return nil
 	}
-	return walkReqNode(reqBody, true)
+	// 1. 先展开 params[xxx] 扁平字段
+	if err := ExpandBracketKey(reqBody); err != nil {
+		return err
+	}
+	return walkReqNode(reqBody, 0)
 }
+
+// 全局最大递归深度，防止恶意JSON栈溢出
+const maxWalkDepth = 20
 
 // walkReqNode
 // isRoot = true 代表最外层，只有根节点才解析 current / size
-func walkReqNode(node any, isRoot bool) error {
+func walkReqNode(node any, depth int) error {
 	if node == nil {
 		return nil
+	}
+
+	if depth > maxWalkDepth {
+		return fmt.Errorf("json nested too deep, max depth %d", maxWalkDepth)
 	}
 
 	switch v := node.(type) {
 	case map[string]interface{}:
 		// 顶层才转 current、size
-		if isRoot {
+		if depth == 0 {
 			if err := convertField(v, "current", false); err != nil {
 				return err
 			}
@@ -159,15 +171,30 @@ func walkReqNode(node any, isRoot bool) error {
 			}
 		}
 		// 所有层级都转换这些字段
-		_ = convertField(v, "id", false)
-		_ = convertField(v, "parentId", false)
-		_ = convertField(v, "status", true)
-		_ = convertField(v, "createdBy", false)
-		_ = convertField(v, "updatedBy", false)
+		err := convertField(v, "id", false)
+		if err != nil {
+			return err
+		}
+		err = convertField(v, "parentId", false)
+		if err != nil {
+			return err
+		}
+		err = convertField(v, "status", true)
+		if err != nil {
+			return err
+		}
+		err = convertField(v, "createdBy", false)
+		if err != nil {
+			return err
+		}
+		err = convertField(v, "updatedBy", false)
+		if err != nil {
+			return err
+		}
 
 		// 递归遍历子value（数组/嵌套map）
 		for _, val := range v {
-			if err := walkReqNode(val, false); err != nil {
+			if err = walkReqNode(val, depth+1); err != nil {
 				return err
 			}
 		}
@@ -187,11 +214,50 @@ func walkReqNode(node any, isRoot bool) error {
 				v[idx] = i64
 			default:
 				// map / 其他，继续往下递归
-				if err := walkReqNode(item, false); err != nil {
+				if err := walkReqNode(item, depth+1); err != nil {
 					return err
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// ExpandBracketKey 把 params[beginTime] 扁平key展开成嵌套map
+// 输入: {"params[beginTime]":"xxx"}
+// 输出: {"params": {"beginTime":"xxx"}}
+func ExpandBracketKey(m map[string]interface{}) error {
+	temp := make(map[string]interface{})
+	var delKeys []string
+	for k, val := range m {
+		// 匹配 xxx[yyy]
+		re := regexp.MustCompile(`^(.+)\[(.+)]$`)
+		matches := re.FindStringSubmatch(k)
+		if len(matches) != 3 {
+			continue
+		}
+		delKeys = append(delKeys, k)
+		rootKey := matches[1]
+		subKey := matches[2]
+
+		var rootMap map[string]interface{}
+		if exist, ok := temp[rootKey]; ok {
+			rootMap, ok = exist.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("key %s already exists and not a map", rootKey)
+			}
+		} else {
+			rootMap = make(map[string]interface{})
+			temp[rootKey] = rootMap
+		}
+		rootMap[subKey] = val
+	}
+	// 删除旧扁平key，合并新嵌套map
+	for _, dk := range delKeys {
+		delete(m, dk)
+	}
+	for k, v := range temp {
+		m[k] = v
 	}
 	return nil
 }
