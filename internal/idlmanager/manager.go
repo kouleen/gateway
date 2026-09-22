@@ -31,6 +31,7 @@ import (
 type Manager struct {
 	cfg     *config.Config
 	gitRepo *git.Repository
+	mu      sync.Mutex
 }
 
 var (
@@ -60,28 +61,6 @@ func InitManager(cfg *config.Config) *Manager {
 	return manager
 }
 
-// initRepo 初始化仓库，不存在则克隆
-func (m *Manager) initRepo() error {
-	if _, err := os.Stat(m.cfg.IDLLocalPath); os.IsNotExist(err) {
-		logger.Infof("cloning IDL repository...")
-		repo, err := git.PlainClone(m.cfg.IDLLocalPath, false, &git.CloneOptions{
-			URL:           m.cfg.IDLRepoURL,
-			ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
-			Depth:         1, // --depth=1 浅克隆
-			Auth:          m.getGitAuth(),
-			Progress:      os.Stdout,
-		})
-		if err != nil {
-			return fmt.Errorf("git clone failed: %w", err)
-		}
-		m.gitRepo = repo // 保存，后续pull复用，如果你想优化，可以把 *git.Repository 存到 Manager结构体
-		return nil
-	}
-
-	// 已存在则拉取最新
-	return m.pullRepo()
-}
-
 // 返回nil代表公开仓库不需要认证
 func (m *Manager) getGitAuth() *http.BasicAuth {
 	if m.cfg.GitAuthPassword == "" {
@@ -93,70 +72,142 @@ func (m *Manager) getGitAuth() *http.BasicAuth {
 	}
 }
 
-// pullRepo 拉取最新代码
-func (m *Manager) pullRepo() error {
-	if m.gitRepo == nil {
-		repo, err := git.PlainOpen(m.cfg.IDLLocalPath)
-		if err != nil {
-			return fmt.Errorf("open repo failed: %w", err)
-		}
-		m.gitRepo = repo
-	}
-	workTree, err := m.gitRepo.Worktree()
+// initRepo 初始化仓库入口：存在则更新，不存在则克隆；仓库损坏时自动重建
+func (m *Manager) initRepo() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	path := m.cfg.IDLLocalPath
+	stat, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("get worktree failed: %w", err)
+		if os.IsNotExist(err) {
+			logger.Infof("local IDL repo not found, shallow clone start")
+			return m.cloneRaw()
+		}
+		return fmt.Errorf("stat repo path failed: %w", err)
+	}
+	// 路径存在但不是文件夹，异常，强制重建
+	if !stat.IsDir() {
+		logger.Warnf("repo path is not directory, cleanup and re-clone")
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+		m.gitRepo = nil
+		return m.cloneRaw()
 	}
 
-	// pull = fetch + merge
-	if err = workTree.Pull(&git.PullOptions{
+	// 目录存在，打开仓库
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		logger.Warnf("open local repo failed, cleanup and re-clone, err=%v", err)
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+		m.gitRepo = nil
+		return m.cloneRaw()
+	}
+	m.gitRepo = repo
+
+	// 执行 fetch + hard reset 替代 pull
+	return m.fetchAndResetRaw()
+}
+
+// cloneRaw 内部裸克隆，不加锁（上层initRepo已经加锁）
+func (m *Manager) cloneRaw() error {
+	repo, err := git.PlainClone(m.cfg.IDLLocalPath, false, &git.CloneOptions{
+		URL:           m.cfg.IDLRepoURL,
 		ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
+		Depth:         1, // 浅克隆，仅拉最新commit
+		Auth:          m.getGitAuth(),
 		Progress:      os.Stdout,
-	}); err != nil {
-		// 没有更新时 go‑git 返回 git.NoErrAlreadyUpToDate，不算错误
+	})
+	if err != nil {
+		return fmt.Errorf("git clone failed: %w", err)
+	}
+	m.gitRepo = repo
+	logger.Infof("shallow clone success")
+	return nil
+}
+
+// fetchAndResetRaw 裸更新逻辑，上层已加锁；兼容浅仓库，不再使用Pull
+func (m *Manager) fetchAndResetRaw() error {
+	repo := m.gitRepo
+	remote, err := repo.Remote("origin")
+	if err != nil {
+		return fmt.Errorf("get remote origin failed: %w", err)
+	}
+
+	// 浅克隆必须设置 Depth:1，否则fetch拿不到新提交
+	fetchOpts := &git.FetchOptions{
+		Depth:    1,
+		Auth:     m.getGitAuth(),
+		Progress: os.Stdout,
+	}
+	err = remote.Fetch(fetchOpts)
+	if err != nil {
 		if errors.Is(err, git.NoErrAlreadyUpToDate) {
 			logger.Infof("IDL repo already up‑to‑date")
 			return nil
 		}
-		if strings.Contains(err.Error(), "object not found") {
-			logger.Warnf("git object missing, will delete local repo and re-clone")
-			// 删除目录，然后走clone逻辑
-			_ = os.RemoveAll(m.cfg.IDLLocalPath)
-			return m.initRepo()
+		errMsg := err.Error()
+		// 对象缺失，触发强制重建
+		if strings.Contains(errMsg, "object not found") {
+			logger.Warnf("git object missing, force re-clone")
+			if err := os.RemoveAll(m.cfg.IDLLocalPath); err != nil {
+				return err
+			}
+			m.gitRepo = nil
+			return m.cloneRaw()
 		}
-		return fmt.Errorf("git pull failed: %w", err)
+		return fmt.Errorf("fetch remote failed: %w", err)
 	}
-	logger.Infof("IDL repo pulled latest version")
+
+	// 获取远程分支引用 origin/xxx
+	remoteRefName := plumbing.NewRemoteReferenceName("origin", m.cfg.IDLRepoBranch)
+	remoteRef, err := repo.Reference(remoteRefName, true)
+	if err != nil {
+		return fmt.Errorf("get remote ref %s failed: %w", remoteRefName, err)
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("get worktree failed: %w", err)
+	}
+
+	// HardReset：无条件覆盖本地，对齐远程HEAD，不会出现non‑fast-forward
+	err = wt.Reset(&git.ResetOptions{
+		Commit: remoteRef.Hash(),
+		Mode:   git.HardReset,
+	})
+	if err != nil {
+		return fmt.Errorf("hard reset to %s failed: %w", remoteRef.Hash().String(), err)
+	}
+	logger.Infof("fetch & hard reset success, latest commit=%s", remoteRef.Hash().String())
 	return nil
 }
 
-//// initRepo 初始化仓库，不存在则克隆
-//func (m *Manager) initRepo() error {
-//	if _, err := os.Stat(m.cfg.IDLLocalPath); os.IsNotExist(err) {
-//		log.Println("cloning IDL repository...")
-//		cmd := exec.Command("git", "clone", "--depth", "1", "-b", m.cfg.IDLRepoBranch, m.cfg.IDLRepoURL, m.cfg.IDLLocalPath)
-//		cmd.Env = append(os.Environ(), "GIT_HTTP_CONNECT_TIMEOUT=15", "GIT_HTTP_TIMEOUT=20")
-//		cmd.Stdout = os.Stdout
-//		cmd.Stderr = os.Stderr
-//		if err := cmd.Run(); err != nil {
-//			return fmt.Errorf("git clone failed: %w", err)
-//		}
-//		return nil
-//	}
-//	// 已存在则先拉取一次
-//	return m.pullRepo()
-//}
-//
-//// pullRepo 拉取最新代码
-//func (m *Manager) pullRepo() error {
-//	cmd := exec.Command("git", "-C", m.cfg.IDLLocalPath, "pull", "origin", m.cfg.IDLRepoBranch)
-//	cmd.Stdout = os.Stdout
-//	cmd.Stderr = os.Stderr
-//	if err := cmd.Run(); err != nil {
-//		return fmt.Errorf("git pull failed: %w", err)
-//	}
-//	logger.Infof("IDL repo pulled latest version")
-//	return nil
-//}
+// PullRepo 对外暴露的更新方法（定时轮询调用）
+func (m *Manager) PullRepo() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.gitRepo == nil {
+		return m.initRepo()
+	}
+	return m.fetchAndResetRaw()
+}
+
+// ForceReClone 强制清理并重新克隆（故障恢复用）
+func (m *Manager) ForceReClone() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	logger.Warnf("force re-clone IDL repo")
+	if err := os.RemoveAll(m.cfg.IDLLocalPath); err != nil {
+		return err
+	}
+	m.gitRepo = nil
+	return m.cloneRaw()
+}
 
 // reloadAll 重新加载所有客户端和路由
 func (m *Manager) reloadAll() error {
@@ -168,7 +219,7 @@ func (m *Manager) reloadAll() error {
 	}
 
 	var svcCfg config.ServersConfig
-	if err := yaml.Unmarshal(servicesData, &svcCfg); err != nil {
+	if err = yaml.Unmarshal(servicesData, &svcCfg); err != nil {
 		return fmt.Errorf("parse services.yaml failed: %w", err)
 	}
 
@@ -248,7 +299,7 @@ func (m *Manager) reloadAll() error {
 func (m *Manager) TriggerUpdate() error {
 	_, err, _ := updateGroup.Do("idl-update", func() (interface{}, error) {
 		logger.Infof("start IDL update process")
-		if err := m.pullRepo(); err != nil {
+		if err := m.PullRepo(); err != nil {
 			logger.Errorf("pull repo failed: %v", err)
 			return nil, err
 		}
