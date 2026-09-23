@@ -179,6 +179,10 @@ func walkReqNode(node any, depth int) error {
 		if err != nil {
 			return err
 		}
+		err = convertField(v, "roleId", false)
+		if err != nil {
+			return err
+		}
 		err = convertField(v, "status", true)
 		if err != nil {
 			return err
@@ -312,6 +316,8 @@ func walkNode(node any) {
 		// v 已经是map，这里 v 不可能是nil map（类型断言成功时map非nil）
 		convertInt64Field(v, "id")
 		convertInt64Field(v, "parentId")
+		convertInt64Field(v, "userId")
+		convertInt64Field(v, "roleId")
 		convertInt64Field(v, "createdBy")
 		convertInt64Field(v, "updatedBy")
 
