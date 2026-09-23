@@ -328,10 +328,19 @@ func walkNode(node any) {
 			}
 		}
 
+		// 处理菜单树 children 递归！
+		if menuIds, ok := v["menuIds"].([]interface{}); ok {
+			walkNode(menuIds)
+		}
+
 	case []interface{}:
-		// 顶层直接返回数组的场景
-		for _, item := range v {
-			walkNode(item)
+		// 数组：逐个判断，如果是int64直接原地转string；否则继续递归
+		for i, item := range v {
+			if num, ok := item.(int64); ok {
+				v[i] = strconv.FormatInt(num, 10)
+			} else {
+				walkNode(item)
+			}
 		}
 	}
 }
