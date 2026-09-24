@@ -1,6 +1,6 @@
 services:
   gateway:
-    image: kouleen/gateway:latest
+    image: ghcr.io/kouleen/gateway:latest
     container_name: gateway
     ports:
       - "8888:8888"
@@ -15,9 +15,10 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB}
     networks:
-      - go-server-internal
+      - etcd-internal
+      - redis-internal
 networks:
-  go-server-internal:
+  etcd-internal:
     external: true
-    name: go-server-internal
-
+  redis-internal:
+    external: true

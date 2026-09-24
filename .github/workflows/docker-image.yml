@@ -25,8 +25,9 @@ jobs:
         id: docker_login
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # 构建镜像并推送到 hub.docker.com kouleen/golive-server:latest
       - name: Build and push Docker image
@@ -36,7 +37,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true # 构建完成自动推送
-          tags: ${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
         #run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
 
         # 仅构建失败时，赋值失败阶段+备注到环境变量
@@ -64,7 +65,7 @@ jobs:
           -H "Content-Type: application/json" \
           -d '{
             "runId": "${{ github.run_id }}",
-            "imageName": "${{ github.repository_owner }}/${{ github.event.repository.name }}:latest",
+            "imageName": "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest",
             "containerName": "${{ github.event.repository.name }}",
             "branch": "${{ github.ref_name }}",
             "repo": "${{ github.repository }}",
@@ -102,58 +103,7 @@ jobs:
   build-cloud:
     runs-on: ubuntu-latest
     steps:
-      # 拉取代码
-      - name: Checkout code
-        id: checkout
-        uses: actions/checkout@v4
-
-      # 初始化Docker构建工具
-      - name: Set up Docker
-        id: setup_docker
-        uses: docker/setup-buildx-action@v3
-
-      # 登录Docker Hub
-      - name: Login to ghcr.io
-        id: docker_login
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # 构建镜像并推送到
-      - name: Build and push ghcr.io image
-        id: docker_build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true # 构建完成自动推送
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-        #run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
-
-        # 仅构建失败时，赋值失败阶段+备注到环境变量
-      - name: Set Fail Info Env
-        id: set_fail_env
-        if: always()
-        run: |
-          if [[ "${{ steps.checkout.outcome }}" == "failure" ]]; then
-            echo "fail_msg=actions/checkout拉取代码失败" >> $GITHUB_ENV
-          elif [[ "${{ steps.setup_docker.outcome }}" == "failure" ]]; then
-            echo "fail_msg=buildx工具初始化失败" >> $GITHUB_ENV
-          elif [[ "${{ steps.docker_login.outcome }}" == "failure" ]]; then
-            echo "fail_msg=Docker账号密码密钥错误，登录仓库失败" >> $GITHUB_ENV
-          elif [[ "${{ steps.docker_build.outcome }}" == "failure" ]]; then
-            echo "fail_stage=Docker镜像构建推送" >> $GITHUB_ENV
-            echo "fail_msg=Docker镜像构建推送失败" >> $GITHUB_ENV
-          else
-            echo "fail_msg=流水线未发现异常" >> $GITHUB_ENV
-          fi
-
       - name: Call Custom Callback API
-        if : always()
         run: |
           curl -X POST "https://cloud.kouleen.cn/api/docker/webhook/put?secret=${{ secrets.HOOK_SECRET }}" \
           -H "Content-Type: application/json" \
