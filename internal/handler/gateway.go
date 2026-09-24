@@ -91,7 +91,9 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 
 	// 合并路径参数（Hertz中Params是字段，不是函数）
 	for _, param := range c.Params {
-		reqBody[param.Key] = param.Value
+		if param.Key != "path" {
+			reqBody[param.Key] = param.Value
+		}
 	}
 
 	if userId, exist := c.Get("userId"); exist {
