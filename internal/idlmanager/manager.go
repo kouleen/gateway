@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"github.com/cloudwego/kitex/transport"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	gittransport "github.com/go-git/go-git/v5/plumbing/transport"
+	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	etcd "github.com/kitex-contrib/registry-etcd"
 	"github.com/kouleen/gateway/internal/config"
 	gen "github.com/kouleen/gateway/internal/generic"
@@ -38,6 +41,14 @@ var (
 	manager     *Manager
 	once        sync.Once
 	updateGroup singleflight.Group
+
+	newSSHAgentAuth = func(user string) (gittransport.AuthMethod, error) {
+		return gitssh.NewSSHAgentAuth(user)
+	}
+	newSSHAuthByFile = func(user, pemFile, password string) (gittransport.AuthMethod, error) {
+		return gitssh.NewPublicKeysFromFile(user, pemFile, password)
+	}
+	userHomeDir = os.UserHomeDir
 )
 
 // InitManager 初始化单例
@@ -62,14 +73,18 @@ func InitManager(cfg *config.Config) *Manager {
 }
 
 // 返回nil代表公开仓库不需要认证
-func (m *Manager) getGitAuth() *http.BasicAuth {
+func (m *Manager) getGitAuth() (gittransport.AuthMethod, error) {
+	if isSSHRepoURL(m.cfg.IDLRepoURL) {
+		return buildSSHAuth(m.cfg)
+	}
+
 	if m.cfg.GitAuthPassword == "" {
-		return nil
+		return nil, nil
 	}
-	return &http.BasicAuth{
-		Username: m.cfg.GitAuthUser,
+	return &githttp.BasicAuth{
+		Username: firstNonEmpty(m.cfg.GitAuthUser, gitssh.DefaultUsername),
 		Password: m.cfg.GitAuthPassword,
-	}
+	}, nil
 }
 
 // initRepo 初始化仓库入口：存在则更新，不存在则克隆；仓库损坏时自动重建
@@ -114,11 +129,16 @@ func (m *Manager) initRepo() error {
 
 // cloneRaw 内部裸克隆，不加锁（上层initRepo已经加锁）
 func (m *Manager) cloneRaw() error {
+	auth, err := m.getGitAuth()
+	if err != nil {
+		return err
+	}
+
 	repo, err := git.PlainClone(m.cfg.IDLLocalPath, false, &git.CloneOptions{
 		URL:           m.cfg.IDLRepoURL,
 		ReferenceName: plumbing.NewBranchReferenceName(m.cfg.IDLRepoBranch),
 		Depth:         1, // 浅克隆，仅拉最新commit
-		Auth:          m.getGitAuth(),
+		Auth:          auth,
 		Progress:      os.Stdout,
 	})
 	if err != nil {
@@ -138,18 +158,23 @@ func (m *Manager) fetchAndResetRaw() error {
 	}
 
 	// 浅克隆必须设置 Depth:1，否则fetch拿不到新提交
+	auth, authErr := m.getGitAuth()
+	if authErr != nil {
+		return authErr
+	}
+
 	fetchOpts := &git.FetchOptions{
 		Depth:    1,
-		Auth:     m.getGitAuth(),
+		Auth:     auth,
 		Progress: os.Stdout,
 	}
-	err = remote.Fetch(fetchOpts)
-	if err != nil {
-		if errors.Is(err, git.NoErrAlreadyUpToDate) {
+	fetchErr := remote.Fetch(fetchOpts)
+	if fetchErr != nil {
+		if errors.Is(fetchErr, git.NoErrAlreadyUpToDate) {
 			logger.Infof("IDL repo already up‑to‑date")
 			return nil
 		}
-		errMsg := err.Error()
+		errMsg := fetchErr.Error()
 		// 对象缺失，触发强制重建
 		if strings.Contains(errMsg, "object not found") {
 			logger.Warnf("git object missing, force re-clone")
@@ -159,7 +184,7 @@ func (m *Manager) fetchAndResetRaw() error {
 			m.gitRepo = nil
 			return m.cloneRaw()
 		}
-		return fmt.Errorf("fetch remote failed: %w", err)
+		return fmt.Errorf("fetch remote failed: %w", fetchErr)
 	}
 
 	// 获取远程分支引用 origin/xxx
@@ -184,6 +209,79 @@ func (m *Manager) fetchAndResetRaw() error {
 	}
 	logger.Infof("fetch & hard reset success, latest commit=%s", remoteRef.Hash().String())
 	return nil
+}
+
+func buildSSHAuth(cfg *config.Config) (gittransport.AuthMethod, error) {
+	user := deriveSSHUser(cfg.IDLRepoURL, cfg.GitSSHUser)
+	var loadErrs []string
+
+	for _, keyPath := range sshKeyCandidates(cfg.GitSSHKeyPath) {
+		auth, err := newSSHAuthByFile(user, keyPath, cfg.GitSSHPassphrase)
+		if err == nil {
+			return auth, nil
+		}
+		loadErrs = append(loadErrs, fmt.Sprintf("%s: %v", keyPath, err))
+	}
+
+	auth, err := newSSHAgentAuth(user)
+	if err == nil {
+		return auth, nil
+	}
+
+	if len(loadErrs) > 0 {
+		return nil, fmt.Errorf("build SSH auth failed, key errors=%s, ssh-agent error=%w", strings.Join(loadErrs, "; "), err)
+	}
+	return nil, fmt.Errorf("SSH repo requires available credentials, set GIT_SSH_PRIVATE_KEY_PATH or mount ~/.ssh and expose ssh-agent: %w", err)
+}
+
+func isSSHRepoURL(repoURL string) bool {
+	return strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://")
+}
+
+func deriveSSHUser(repoURL, override string) string {
+	if override != "" {
+		return override
+	}
+	if strings.HasPrefix(repoURL, "ssh://") {
+		if parsed, err := url.Parse(repoURL); err == nil && parsed.User != nil {
+			if user := parsed.User.Username(); user != "" {
+				return user
+			}
+		}
+	}
+	if at := strings.Index(repoURL, "@"); at > 0 {
+		return repoURL[:at]
+	}
+	return gitssh.DefaultUsername
+}
+
+func sshKeyCandidates(explicitPath string) []string {
+	if explicitPath != "" {
+		return []string{explicitPath}
+	}
+
+	home, err := userHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+
+	var candidates []string
+	for _, name := range []string{"id_ed25519", "id_rsa", "id_ecdsa"} {
+		path := filepath.Join(home, ".ssh", name)
+		if stat, err := os.Stat(path); err == nil && !stat.IsDir() {
+			candidates = append(candidates, path)
+		}
+	}
+	return candidates
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // PullRepo 对外暴露的更新方法（定时轮询调用）

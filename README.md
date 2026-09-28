@@ -240,7 +240,7 @@ export LISTEN_ADDR=":8888"
 export ETCD_ENDPOINTS="127.0.0.1:2379"
 
 # IDL 仓库 Git 地址
-export IDL_REPO_URL="https://github.com/your-org/idl-repo.git"
+export IDL_REPO_URL="git@github.com:your-org/idl-repo.git"
 export IDL_REPO_BRANCH="main"
 
 # IDL 本地存储路径
@@ -254,7 +254,12 @@ export REDIS_ADDR="127.0.0.1:6379"
 export REDIS_PASSWORD=""
 export REDIS_DB=0
 
-# Git 认证（可选，私有仓库需配置）
+# Git SSH（推荐，未设置私钥路径时会尝试 ~/.ssh 下常见默认私钥或 ssh-agent）
+export GIT_SSH_USER="git"
+export GIT_SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_ed25519"
+export GIT_SSH_PRIVATE_KEY_PASSPHRASE=""
+
+# Git HTTP Basic Auth（兼容 https 仓库地址）
 export GIT_AUTH_USER="git"
 export GIT_AUTH_PASSWORD="your-pat-token"
 ```
@@ -278,15 +283,18 @@ go build -o gateway main.go
 | --------------------- | ------------------ | ------ | --------------------------------------------- |
 | `LISTEN_ADDR`       | `:8888`          | string | 网关 HTTP 监听地址                            |
 | `ETCD_ENDPOINTS`    | `127.0.0.1:2379` | string | etcd 地址列表，逗号分隔                       |
-| `IDL_REPO_URL`      | 空                 | string | IDL 仓库 Git URL                              |
+| `IDL_REPO_URL`      | 空                 | string | IDL 仓库 Git URL，推荐使用 SSH 地址           |
 | `IDL_REPO_BRANCH`   | 空                 | string | IDL 仓库分支名                                |
 | `IDL_LOCAL_PATH`    | `idl`            | string | IDL 仓库本地克隆路径                          |
 | `WEBHOOK_SECRET`    | 空                 | string | Webhook 签名密钥，空则跳过校验                |
 | `REDIS_ADDR`        | `127.0.0.1:6379` | string | Redis 地址                                    |
 | `REDIS_PASSWORD`    | 空                 | string | Redis 密码                                    |
 | `REDIS_DB`          | `0`              | int    | Redis 数据库索引                              |
-| `GIT_AUTH_USER`     | 空                 | string | Git Basic Auth 用户名（PAT 场景填任意字符串） |
-| `GIT_AUTH_PASSWORD` | 空                 | string | Git Basic Auth 密码或 PAT Token               |
+| `GIT_SSH_USER`      | `git`            | string | SSH 用户名，未显式指定时会从仓库地址推导      |
+| `GIT_SSH_PRIVATE_KEY_PATH` | 空         | string | SSH 私钥文件路径                              |
+| `GIT_SSH_PRIVATE_KEY_PASSPHRASE` | 空   | string | SSH 私钥口令                                  |
+| `GIT_AUTH_USER`     | 空                 | string | Git Basic Auth 用户名，仅 https 仓库地址使用  |
+| `GIT_AUTH_PASSWORD` | 空                 | string | Git Basic Auth 密码或 PAT Token，仅 https 使用 |
 
 ### 服务路由配置（services.yaml）
 
@@ -522,13 +530,14 @@ docker build -t kouleen/gateway:latest .
 docker run -d \
   --name gateway \
   -p 8888:8888 \
+  -v $HOME/.ssh:/root/.ssh:ro \
   -e ETCD_ENDPOINTS="127.0.0.1:2379" \
-  -e IDL_REPO_URL="https://github.com/your-org/idl-repo.git" \
+  -e IDL_REPO_URL="git@github.com:your-org/idl-repo.git" \
   -e IDL_REPO_BRANCH="main" \
+  -e GIT_SSH_USER="git" \
+  -e GIT_SSH_PRIVATE_KEY_PATH="/root/.ssh/id_ed25519" \
   -e REDIS_ADDR="127.0.0.1:6379" \
   -e WEBHOOK_SECRET="your-secret" \
-  -e GIT_AUTH_USER="git" \
-  -e GIT_AUTH_PASSWORD="your-pat-token" \
   --network go-server-internal \
   kouleen/gateway:latest
 ```
@@ -542,6 +551,11 @@ docker run -d \
 | `IDL_REPO_URL`    | IDL 仓库地址 |
 | `IDL_REPO_BRANCH` | IDL 仓库分支 |
 | `IDL_LOCAL_PATH`  | IDL 本地路径 |
+| `GIT_SSH_USER`    | Git SSH 用户 |
+| `GIT_SSH_PRIVATE_KEY_PATH` | SSH 私钥路径 |
+| `GIT_SSH_PRIVATE_KEY_PASSPHRASE` | SSH 私钥口令 |
+| `GIT_AUTH_USER`   | HTTPS Basic Auth 用户 |
+| `GIT_AUTH_PASSWORD` | HTTPS Basic Auth 密码 |
 | `WEBHOOK_SECRET`  | Webhook 密钥 |
 | `REDIS_ADDR`      | Redis 地址   |
 | `REDIS_PASSWORD`  | Redis 密码   |
@@ -552,7 +566,7 @@ docker run -d \
 多阶段构建：
 
 - **构建阶段**：`kouleen/golang:1.25` 镜像，禁用 CGO 编译
-- **运行阶段**：`kouleen/alpine:latest` 镜像，安装 tzdata / git / ca-certificates
+- **运行阶段**：`kouleen/alpine:latest` 镜像，安装 tzdata / git / openssh-client
 - **时区**：`Asia/Shanghai`
 - **端口**：8888
 
@@ -573,6 +587,11 @@ docker run -d \
 | `DOCKER_USERNAME` | Docker Hub 用户名 |
 | `DOCKER_PASSWORD` | Docker Hub 密码   |
 | `ETCD_ENDPOINTS`  | etcd 地址         |
+| `GIT_SSH_USER`    | Git SSH 用户      |
+| `GIT_SSH_PRIVATE_KEY_PATH` | SSH 私钥路径 |
+| `GIT_SSH_PRIVATE_KEY_PASSPHRASE` | SSH 私钥口令 |
+| `GIT_AUTH_USER`   | HTTPS Basic Auth 用户 |
+| `GIT_AUTH_PASSWORD` | HTTPS Basic Auth 密码 |
 | `IDL_LOCAL_PATH`  | IDL 本地路径      |
 | `IDL_REPO_BRANCH` | IDL 仓库分支      |
 | `IDL_REPO_URL`    | IDL 仓库地址      |
@@ -593,11 +612,20 @@ docker run -d \
 ### Q: 如何配置私有 IDL 仓库？
 
 ```bash
+export IDL_REPO_URL="git@github.com:your-org/idl-repo.git"
+export GIT_SSH_USER="git"
+export GIT_SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_ed25519"
+```
+
+网关会优先按 SSH 方式克隆和拉取私有仓库，并自动尝试 `GIT_SSH_PRIVATE_KEY_PATH`、`~/.ssh/id_ed25519`、`~/.ssh/id_rsa`、`~/.ssh/id_ecdsa` 或 `ssh-agent`。
+
+如果你仍然使用 HTTPS 仓库地址，再改用下面这组兼容配置：
+
+```bash
+export IDL_REPO_URL="https://github.com/your-org/idl-repo.git"
 export GIT_AUTH_USER="git"
 export GIT_AUTH_PASSWORD="your-github-pat-token"
 ```
-
-网关将使用 go-git 的 HTTP Basic Auth 克隆和拉取私有仓库。
 
 ### Q: Webhook 不生效怎么办？
 

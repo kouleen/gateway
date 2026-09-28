@@ -10,10 +10,17 @@ services:
       - IDL_REPO_URL=${IDL_REPO_URL}
       - IDL_REPO_BRANCH=${IDL_REPO_BRANCH}
       - IDL_LOCAL_PATH=${IDL_LOCAL_PATH}
+      - GIT_SSH_USER=${GIT_SSH_USER}
+      - GIT_SSH_PRIVATE_KEY_PATH=${GIT_SSH_PRIVATE_KEY_PATH}
+      - GIT_SSH_PRIVATE_KEY_PASSPHRASE=${GIT_SSH_PRIVATE_KEY_PASSPHRASE}
+      - GIT_AUTH_USER=${GIT_AUTH_USER}
+      - GIT_AUTH_PASSWORD=${GIT_AUTH_PASSWORD}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - REDIS_ADDR=${REDIS_ADDR}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB}
+    volumes:
+      - /root/.ssh:/root/.ssh:ro
     networks:
       - etcd-internal
       - redis-internal

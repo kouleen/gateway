@@ -1,5 +1,5 @@
 FROM kouleen/golang:1.25 AS builder
-LABEL authors="Kouleen.china@gmail.com"
+LABEL authors="kouleen.china@gmail.com"
 # 设置工作目录
 WORKDIR /app
 # 复制 go.mod 和 go.sum 文件，提前下载依赖

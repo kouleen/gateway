@@ -87,6 +87,11 @@ jobs:
             },
             "envList": [
                 "ETCD_ENDPOINTS=${{ secrets.ETCD_ENDPOINTS }}",
+                "GIT_AUTH_PASSWORD=${{ secrets.GIT_AUTH_PASSWORD }}",
+                "GIT_AUTH_USER=${{ secrets.GIT_AUTH_USER }}",
+                "GIT_SSH_PRIVATE_KEY_PASSPHRASE=${{ secrets.GIT_SSH_PRIVATE_KEY_PASSPHRASE }}",
+                "GIT_SSH_PRIVATE_KEY_PATH=${{ secrets.GIT_SSH_PRIVATE_KEY_PATH }}",
+                "GIT_SSH_USER=${{ secrets.GIT_SSH_USER }}",
                 "IDL_LOCAL_PATH=${{ secrets.IDL_LOCAL_PATH }}",
                 "IDL_REPO_BRANCH=${{ secrets.IDL_REPO_BRANCH }}",
                 "IDL_REPO_URL=${{ secrets.IDL_REPO_URL }}",
@@ -96,7 +101,7 @@ jobs:
                 "REDIS_DB=${{ secrets.REDIS_DB }}",
                 "WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}"
             ],
-            "volumeBinds": [],
+            "volumeBinds": ["/root/.ssh:/root/.ssh:ro"],
             "cmdOverride": []
           }'
 
@@ -132,6 +137,11 @@ jobs:
             },
             "envList": [
                 "ETCD_ENDPOINTS=${{ secrets.ETCD_ENDPOINTS }}",
+                "GIT_AUTH_PASSWORD=${{ secrets.GIT_AUTH_PASSWORD }}",
+                "GIT_AUTH_USER=${{ secrets.GIT_AUTH_USER }}",
+                "GIT_SSH_PRIVATE_KEY_PASSPHRASE=${{ secrets.GIT_SSH_PRIVATE_KEY_PASSPHRASE }}",
+                "GIT_SSH_PRIVATE_KEY_PATH=${{ secrets.GIT_SSH_PRIVATE_KEY_PATH }}",
+                "GIT_SSH_USER=${{ secrets.GIT_SSH_USER }}",
                 "IDL_LOCAL_PATH=${{ secrets.IDL_LOCAL_PATH }}",
                 "IDL_REPO_BRANCH=${{ secrets.IDL_REPO_BRANCH }}",
                 "IDL_REPO_URL=${{ secrets.IDL_REPO_URL }}",
@@ -141,6 +151,6 @@ jobs:
                 "REDIS_DB=${{ secrets.REDIS_DB }}",
                 "WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}"
             ],
-            "volumeBinds": [],
+            "volumeBinds": ["/home/kouleen/.ssh:/root/.ssh:ro"],
             "cmdOverride": []
           }'

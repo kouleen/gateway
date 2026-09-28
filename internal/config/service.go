@@ -9,17 +9,20 @@ import (
 
 // Config 网关全局配置
 type Config struct {
-	ListenAddr      string   // 网关监听地址
-	EtcdEndpoints   []string // etcd地址列表
-	WebhookSecret   string   // Webhook签名密钥
-	RedisAddr       string   // Redis地址
-	RedisPassword   string   // Redis密码
-	RedisDB         int      // Redis库号
-	IDLRepoURL      string   // IDL仓库Git地址
-	IDLRepoBranch   string   // IDL仓库分支
-	IDLLocalPath    string   // IDL本地存储路径
-	GitAuthUser     string   // token方式随便填字符串，比如"git"
-	GitAuthPassword string   // 填PAT token或者账号密码
+	ListenAddr       string   // 网关监听地址
+	EtcdEndpoints    []string // etcd地址列表
+	WebhookSecret    string   // Webhook签名密钥
+	RedisAddr        string   // Redis地址
+	RedisPassword    string   // Redis密码
+	RedisDB          int      // Redis库号
+	IDLRepoURL       string   // IDL仓库Git地址
+	IDLRepoBranch    string   // IDL仓库分支
+	IDLLocalPath     string   // IDL本地存储路径
+	GitAuthUser      string   // token方式随便填字符串，比如"git"
+	GitAuthPassword  string   // 填PAT token或者账号密码
+	GitSSHUser       string   // SSH用户名，默认git
+	GitSSHKeyPath    string   // SSH私钥文件路径
+	GitSSHPassphrase string   // SSH私钥口令
 }
 
 var GlobalConfig *Config
@@ -27,17 +30,20 @@ var GlobalConfig *Config
 // LoadConfig 从环境变量加载配置
 func LoadConfig() *Config {
 	GlobalConfig = &Config{
-		ListenAddr:      getEnv("LISTEN_ADDR", ":8888"),
-		EtcdEndpoints:   strings.Split(getEnv("ETCD_ENDPOINTS", "127.0.0.1:2379"), ","),
-		IDLRepoURL:      getEnv("IDL_REPO_URL", ""),
-		IDLRepoBranch:   getEnv("IDL_REPO_BRANCH", ""),
-		IDLLocalPath:    getEnv("IDL_LOCAL_PATH", "idl"),
-		WebhookSecret:   getEnv("WEBHOOK_SECRET", ""),
-		RedisAddr:       getEnv("REDIS_ADDR", "127.0.0.1:6379"),
-		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
-		RedisDB:         getEnvInt("REDIS_DB", 0),
-		GitAuthUser:     getEnv("GIT_AUTH_USER", ""),
-		GitAuthPassword: getEnv("GIT_AUTH_PASSWORD", ""),
+		ListenAddr:       getEnv("LISTEN_ADDR", ":8888"),
+		EtcdEndpoints:    strings.Split(getEnv("ETCD_ENDPOINTS", "etcd:2379"), ","),
+		IDLRepoURL:       getEnv("IDL_REPO_URL", ""),
+		IDLRepoBranch:    getEnv("IDL_REPO_BRANCH", ""),
+		IDLLocalPath:     getEnv("IDL_LOCAL_PATH", "idl"),
+		WebhookSecret:    getEnv("WEBHOOK_SECRET", ""),
+		RedisAddr:        getEnv("REDIS_ADDR", "redis:6379"),
+		RedisPassword:    getEnv("REDIS_PASSWORD", ""),
+		RedisDB:          getEnvInt("REDIS_DB", 0),
+		GitAuthUser:      getEnv("GIT_AUTH_USER", ""),
+		GitAuthPassword:  getEnv("GIT_AUTH_PASSWORD", ""),
+		GitSSHUser:       getEnv("GIT_SSH_USER", "git"),
+		GitSSHKeyPath:    getEnv("GIT_SSH_PRIVATE_KEY_PATH", ""),
+		GitSSHPassphrase: getEnv("GIT_SSH_PRIVATE_KEY_PASSPHRASE", ""),
 	}
 	return GlobalConfig
 }
