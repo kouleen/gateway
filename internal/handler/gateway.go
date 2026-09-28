@@ -95,14 +95,9 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 			reqBody[param.Key] = param.Value
 		}
 	}
-
-	if userId, exist := c.Get("userId"); exist {
-		// WithValue：单跳透传，只传给直接下游；
-		// WithPersistentValue：持续透传，整条调用链都往下传（网关推荐用这个）
-		ctx = metainfo.WithPersistentValue(ctx, "x-user-id", userId.(string))
-
-	}
 	ctx = metainfo.WithPersistentValue(ctx, "x-trace-id", newUUID.String())
+	ctx = metainfo.WithPersistentValue(ctx, "User-Agent", string(c.GetHeader("User-Agent")))
+	ctx = metainfo.WithPersistentValue(ctx, "X-Real-IP", c.ClientIP())
 
 	logger.CtxInfof(ctx, "[%s]-Request Method: [%s] Path: [%s],request: %#v", newUUID.String(), string(c.Method()), string(c.Path()), reqBody)
 	if er := convReqBody(reqBody); er != nil {

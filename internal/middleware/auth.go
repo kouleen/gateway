@@ -10,13 +10,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
-// 白名单路径：无需鉴权直接放行
-//var whitelistPaths = []string{
-//	"/webhook/idl-update",
-//	"/api/user/login",
-//	"/api/user/sms",
-//}
-
 var whitelistPaths []string
 
 // AuthMiddleware 全局Redis鉴权中间件
