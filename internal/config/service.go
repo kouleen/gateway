@@ -41,7 +41,7 @@ func LoadConfig() *Config {
 		RedisDB:          getEnvInt("REDIS_DB", 0),
 		GitAuthUser:      getEnv("GIT_AUTH_USER", ""),
 		GitAuthPassword:  getEnv("GIT_AUTH_PASSWORD", ""),
-		GitSSHUser:       getEnv("GIT_SSH_USER", "git"),
+		GitSSHUser:       getEnv("GIT_SSH_USER", ""),
 		GitSSHKeyPath:    getEnv("GIT_SSH_PRIVATE_KEY_PATH", ""),
 		GitSSHPassphrase: getEnv("GIT_SSH_PRIVATE_KEY_PASSPHRASE", ""),
 	}
