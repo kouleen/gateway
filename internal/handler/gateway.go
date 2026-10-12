@@ -168,34 +168,33 @@ func walkReqNode(node any, depth int) error {
 			}
 		}
 		// 所有层级都转换这些字段
-		err := convertField(v, "id", false)
-		if err != nil {
+
+		if err := convertField(v, "id", false); err != nil {
 			return err
 		}
-		err = convertField(v, "parentId", false)
-		if err != nil {
+		if err := convertField(v, "parentId", false); err != nil {
 			return err
 		}
-		err = convertField(v, "roleId", false)
-		if err != nil {
+
+		if err := convertField(v, "roleId", false); err != nil {
 			return err
 		}
-		err = convertField(v, "status", true)
-		if err != nil {
+		if err := convertField(v, "status", true); err != nil {
 			return err
 		}
-		err = convertField(v, "createdBy", false)
-		if err != nil {
+		if err := convertField(v, "gender", true); err != nil {
 			return err
 		}
-		err = convertField(v, "updatedBy", false)
-		if err != nil {
+		if err := convertField(v, "createdBy", false); err != nil {
+			return err
+		}
+		if err := convertField(v, "updatedBy", false); err != nil {
 			return err
 		}
 
 		// 递归遍历子value（数组/嵌套map）
 		for _, val := range v {
-			if err = walkReqNode(val, depth+1); err != nil {
+			if err := walkReqNode(val, depth+1); err != nil {
 				return err
 			}
 		}
