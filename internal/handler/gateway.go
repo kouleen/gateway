@@ -3,6 +3,9 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,6 +39,12 @@ func isWebSocketRequest(c *app.RequestContext) bool {
 		strings.EqualFold(upgradeHdr, "websocket")
 }
 
+// isFileUploadRequest 判断是不是文件上传
+func isFileUploadRequest(c *app.RequestContext) bool {
+	contentType := string(c.GetHeader("Content-Type"))
+	return strings.Contains(contentType, "multipart/form-data")
+}
+
 // CustomRouteHandler 自定义路由统一转发入口
 func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 	newUUID, _ := uuid.NewUUID()
@@ -61,6 +70,11 @@ func CustomRouteHandler(ctx context.Context, c *app.RequestContext) {
 			"message": "service not found",
 			"traceId": newUUID.String(),
 		})
+		return
+	}
+
+	if isFileUploadRequest(c) {
+		fileUploadCallHandle(ctx, c, cli, &target)
 		return
 	}
 
@@ -427,6 +441,81 @@ func webSocketCallHandle(ctx context.Context, c *app.RequestContext, cli generic
 		return
 	}
 
+}
+
+func fileUploadCallHandle(ctx context.Context, c *app.RequestContext, cli genericclient.Client, target *config.RouteTarget) {
+	traceId, _ := metainfo.GetPersistentValue(ctx, "x-trace-id")
+	fh, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusBadRequest,
+			"message": "get form file fail:" + err.Error(),
+			"traceId": traceId,
+		})
+		return
+	}
+	fileStream, err := fh.Open()
+	if err != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusInternalServerError,
+			"message": "open file stream fail:" + err.Error(),
+			"traceId": traceId,
+		})
+		return
+	}
+	defer func(fileStream multipart.File) {
+		_ = fileStream.Close()
+	}(fileStream)
+	fileBytes, err := io.ReadAll(fileStream)
+	if err != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusInternalServerError,
+			"message": "read file fail:" + err.Error(),
+			"traceId": traceId,
+		})
+		return
+	}
+	// MIME校验（魔数校验）
+	var mime string
+	if len(fileBytes) > 512 {
+		mime = http.DetectContentType(fileBytes[:512])
+	} else {
+		mime = http.DetectContentType(fileBytes)
+	}
+	logger.CtxInfof(ctx, "upload detect mime: %s, size:%d", mime, fh.Size)
+
+	// 【重点】泛化调用的请求体map，对应Thrift UploadFileReq
+	// thrift: struct UploadFileReq{ 1:binary fileData; 2:string fileName;3:string contentType;4:i64 fileSize }
+	reqBody := map[string]any{
+		"fileData":    fileBytes, // binary 在thrift泛化里直接填[]byte
+		"fileName":    fh.Filename,
+		"contentType": mime,
+		"fileSize":    fh.Size,
+	}
+	// metainfo继续透传trace、ip、ua（你原有逻辑）
+	ctx = metainfo.WithPersistentValue(ctx, "User-Agent", string(c.GetHeader("User-Agent")))
+	ctx = metainfo.WithPersistentValue(ctx, "X-Real-IP", c.ClientIP())
+	// 泛化调用业务服务 Upload 方法
+	resp, err := cli.GenericCall(ctx, target.RPCMethod, reqBody)
+	if err != nil {
+		c.JSON(consts.StatusOK, map[string]interface{}{
+			"sign":    time.Now().UnixMilli(),
+			"code":    consts.StatusInternalServerError,
+			"message": "rpc call err:" + err.Error(),
+			"traceId": traceId,
+		})
+		return
+	}
+	c.JSON(consts.StatusOK, map[string]any{
+		"sign":    time.Now().UnixMilli(),
+		"code":    consts.StatusOK,
+		"message": "success",
+		"data":    resp,
+		"traceId": traceId,
+	})
 }
 
 // DirectCallHandler 直调模式（兼容旧版，调试用）
