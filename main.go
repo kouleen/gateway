@@ -40,7 +40,7 @@ func main() {
 		MaxAge:          12 * time.Hour,
 	}))
 
-	//h.Use(middleware2.AuthMiddleware()) // 鉴权中间件
+	h.Use(middleware2.AuthMiddleware()) // 鉴权中间件
 
 	// 6. 注册路由
 	router.RegisterRoutes(h)
