@@ -383,14 +383,43 @@ func webSocketCallHandle(ctx context.Context, c *app.RequestContext, cli generic
 		defer func(conn *websocket.Conn) {
 			defer func(conn *websocket.Conn) {
 				_ = conn.Close()
+				logger.CtxInfof(ctx, "[%s] websocket connection closed", traceId)
 			}(conn)
+			// 读超时：如果超过这个时间没有收到任何消息/Ping，判定连接失效
+			const readTimeout = 45 * time.Second
+			// 设置读取超时，每次收到消息/pong后重置超时
+			err := conn.SetReadDeadline(time.Now().Add(readTimeout))
+			if err != nil {
+				return
+			}
+			// Pong回调：收到客户端Pong帧时，重置读超时
+			conn.SetPongHandler(func(string) error {
+				err = conn.SetReadDeadline(time.Now().Add(readTimeout))
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			// PingHandler：收到客户端Ping帧，自动回复Pong并重置超时
+			conn.SetPingHandler(func(appData string) error {
+				err = conn.SetReadDeadline(time.Now().Add(readTimeout))
+				if err != nil {
+					return err
+				}
+				return conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(5*time.Second))
+			})
 			for {
+				newUUID, _ := uuid.NewUUID()
+				ctx = metainfo.WithPersistentValue(ctx, "x-sub-trace-id", newUUID.String())
 				messageType, message, err := conn.ReadMessage()
 				if err != nil {
 					logger.CtxErrorf(ctx, "websocket read error: %v", err)
 					return
 				}
-
+				// 收到任意业务消息，重置读超时
+				if err = conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+					return
+				}
 				// 解析ws payload为参数map
 				var reqBody map[string]interface{}
 				if err = json.Unmarshal(message, &reqBody); err != nil {
