@@ -193,7 +193,16 @@ func walkReqNode(node any, depth int) error {
 		if err := convertField(v, "roleId", false); err != nil {
 			return err
 		}
+		if err := convertField(v, "roomNumber", false); err != nil {
+			return err
+		}
+		if err := convertField(v, "roomType", true); err != nil {
+			return err
+		}
 		if err := convertField(v, "status", true); err != nil {
+			return err
+		}
+		if err := convertField(v, "open", true); err != nil {
 			return err
 		}
 		if err := convertField(v, "gender", true); err != nil {
