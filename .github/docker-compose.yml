@@ -23,6 +23,7 @@ services:
       - /root/.ssh:/root/.ssh:ro
     networks:
       - etcd-internal
+      - mysql-internal
       - redis-internal
 
   user-center:
@@ -79,6 +80,68 @@ services:
       - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
       - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
       - MYSQL_SLAVE2_DATABASE=${SYSTEM_MYSQL_SLAVE2_DATABASE}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+
+  room-center:
+    image: ghcr.io/kouleen/room-center:latest
+    container_name: room-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${ROOM_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${ROOM_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${ROOM_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${ROOM_MYSQL_SLAVE2_DATABASE}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+
+  workflow-center:
+    image: ghcr.io/kouleen/workflow-center:latest
+    container_name: workflow-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${WORKFLOW_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${WORKFLOW_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${WORKFLOW_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${WORKFLOW_MYSQL_SLAVE2_DATABASE}
       - RABBITMQ_URL=${RABBITMQ_URL}
     networks:
       - etcd-internal
