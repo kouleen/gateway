@@ -17,8 +17,8 @@ services:
       - --initial-cluster-state=new
       - --initial-cluster-token=kouleen.china@gmail.com
     networks:
-      - go-server-internal
+      - etcd-internal
 networks:
-  go-server-internal:
+  etcd-internal:
     driver: bridge
-    name: go-server-internal
+    name: etcd-internal

@@ -1,4 +1,11 @@
 services:
+  live-h5:
+    image: ghcr.io/kouleen/live-h5:latest
+    container_name: live-h5
+    ports:
+      - "8887:80"
+    networks:
+      - live-h5-internal
   gateway:
     image: ghcr.io/kouleen/gateway:latest
     container_name: gateway
@@ -10,11 +17,6 @@ services:
       - IDL_REPO_URL=${IDL_REPO_URL}
       - IDL_REPO_BRANCH=${IDL_REPO_BRANCH}
       - IDL_LOCAL_PATH=${IDL_LOCAL_PATH}
-      - GIT_SSH_USER=${GIT_SSH_USER}
-      - GIT_SSH_PRIVATE_KEY_PATH=${GIT_SSH_PRIVATE_KEY_PATH}
-      - GIT_SSH_PRIVATE_KEY_PASSPHRASE=${GIT_SSH_PRIVATE_KEY_PASSPHRASE}
-      - GIT_AUTH_USER=${GIT_AUTH_USER}
-      - GIT_AUTH_PASSWORD=${GIT_AUTH_PASSWORD}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - REDIS_ADDR=${REDIS_ADDR}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -81,11 +83,14 @@ services:
       - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
       - MYSQL_SLAVE2_DATABASE=${SYSTEM_MYSQL_SLAVE2_DATABASE}
       - RABBITMQ_URL=${RABBITMQ_URL}
+      - CLOUDFLARE_ACCESS_KEY_ID=${CLOUDFLARE_ACCESS_KEY_ID}
+      - CLOUDFLARE_SECRET_ACCESS_KEY=${CLOUDFLARE_SECRET_ACCESS_KEY}
+      - CLOUDFLARE_BUCKET=${CLOUDFLARE_BUCKET}
+      - CLOUDFLARE_ENDPOINT=${CLOUDFLARE_ENDPOINT}
     networks:
       - etcd-internal
       - mysql-internal
       - redis-internal
-
 
   room-center:
     image: ghcr.io/kouleen/room-center:latest
@@ -142,6 +147,129 @@ services:
       - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
       - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
       - MYSQL_SLAVE2_DATABASE=${WORKFLOW_MYSQL_SLAVE2_DATABASE}
+      - MYSQL_ADDR_LISTENER=${MYSQL_ADDR_LISTENER}
+      - MYSQL_USER_LISTENER=${MYSQL_USER_LISTENER}
+      - MYSQL_PASSWORD_LISTENER=${MYSQL_PASSWORD_LISTENER}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+  payment-center:
+    image: ghcr.io/kouleen/payment-center:latest
+    container_name: payment-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${PAYMENT_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${PAYMENT_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${PAYMENT_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${PAYMENT_MYSQL_SLAVE2_DATABASE}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+  guild-center:
+    image: ghcr.io/kouleen/guild-center:latest
+    container_name: guild-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${GUILD_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${GUILD_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${GUILD_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${GUILD_MYSQL_SLAVE2_DATABASE}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+  gift-center:
+    image: ghcr.io/kouleen/gift-center:latest
+    container_name: gift-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${GIFT_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${GIFT_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${GIFT_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${GIFT_MYSQL_SLAVE2_DATABASE}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    networks:
+      - etcd-internal
+      - mysql-internal
+      - redis-internal
+
+  stream-center:
+    image: ghcr.io/kouleen/stream-center:latest
+    container_name: stream-center
+    environment:
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS}
+      - ADDRESS=${STREAM_ADDRESS}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - MYSQL_USERNAME=${MYSQL_USERNAME}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_DATABASE=${STREAM_MYSQL_DATABASE}
+      - MYSQL_SLAVE1_USERNAME=${MYSQL_SLAVE1_USERNAME}
+      - MYSQL_SLAVE1_PASSWORD=${MYSQL_SLAVE1_PASSWORD}
+      - MYSQL_SLAVE1_HOST=${MYSQL_SLAVE1_HOST}
+      - MYSQL_SLAVE1_PORT=${MYSQL_SLAVE1_PORT}
+      - MYSQL_SLAVE1_DATABASE=${STREAM_MYSQL_SLAVE1_DATABASE}
+      - MYSQL_SLAVE2_USERNAME=${MYSQL_SLAVE2_USERNAME}
+      - MYSQL_SLAVE2_PASSWORD=${MYSQL_SLAVE2_PASSWORD}
+      - MYSQL_SLAVE2_HOST=${MYSQL_SLAVE2_HOST}
+      - MYSQL_SLAVE2_PORT=${MYSQL_SLAVE2_PORT}
+      - MYSQL_SLAVE2_DATABASE=${STREAM_MYSQL_SLAVE2_DATABASE}
       - RABBITMQ_URL=${RABBITMQ_URL}
     networks:
       - etcd-internal
@@ -155,3 +283,6 @@ networks:
     external: true
   redis-internal:
     external: true
+  live-h5-internal:
+    driver: bridge
+    name: live-h5-internal
