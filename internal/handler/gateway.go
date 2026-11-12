@@ -199,6 +199,9 @@ func walkReqNode(node any, depth int) error {
 		if err := convertField(v, "roomType", true); err != nil {
 			return err
 		}
+		if err := convertField(v, "ioType", true); err != nil {
+			return err
+		}
 		if err := convertField(v, "status", true); err != nil {
 			return err
 		}
